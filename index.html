@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>fractal maker</title>
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com">
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        #controls {
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(0, 0, 0, 0.95); color: white;
+            padding: 20px; border-radius: 15px; z-index: 10;
+            border: 1px solid #333; width: 240px;
+            box-shadow: 0 0 30px rgba(0, 242, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+        #status { color: #ffffff; font-weight: bold; margin-bottom: 15px; font-size: 14px; text-align: center; text-transform: uppercase; letter-spacing: 2px; }
+        .row { margin-bottom: 12px; }
+        .label { font-size: 10px; color: #ffffff; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; }
+        input { width: 100%; cursor: pointer; accent-color: #00f2ff; margin-top: 2px; }
+        span { float: right; color: #00f2ff; font-family: monospace; font-size: 14px; }
+        button { 
+            width: 100%; padding: 12px; background: #00f2ff; border: none; 
+            border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 15px;
+            transition: 0.2s; color: black; text-transform: uppercase;
+        }
+        button:hover { background: #00c8d4; transform: scale(1.02); }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <div id="status">Ready</div>
+        <div class="row">
+            <div class="label">Arms <span id="nVal">20</span></div>
+            <input type="range" id="numS" min="1" max="25" step="1" value="20">
+        </div>
+        <div class="row">
+            <div class="label">Speed <span id="sVal">100</span></div>
+            <input type="range" id="speedS" min="1" max="100" value="100">
+        </div>
+        <div class="row">
+            <div class="label">Rel Multiplier <span id="mVal">3</span></div>
+            <input type="range" id="multS" min="2" max="10" step="1" value="3">
+        </div>
+        <div class="row">
+            <div class="label">Arm Ratio <span id="rVal">0.50</span></div>
+            <input type="range" id="ratioS" min="0.1" max="0.9" step="0.01" value="0.5">
+        </div>
+        <button id="resetB">Generate Masterpiece</button>
+    </div>
+    <canvas id="trailCanvas"></canvas>
+    <canvas id="armCanvas"></canvas>
+
+    <script>
+        const tCanvas = document.getElementById('trailCanvas'), aCanvas = document.getElementById('armCanvas');
+        const tCtx = tCanvas.getContext('2d'), aCtx = aCanvas.getContext('2d');
+        const sS = document.getElementById('speedS'), mS = document.getElementById('multS'), 
+              rS = document.getElementById('ratioS'), nS = document.getElementById('numS');
+        const sV = document.getElementById('sVal'), mV = document.getElementById('mVal'), 
+              rV = document.getElementById('rVal'), nV = document.getElementById('nVal');
+        const statusD = document.getElementById('status'), resetB = document.getElementById('resetB');
+        
+        let width, height, time = 0, isRunning = true, lastPoints = [];
+
+        function setupCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            width = window.innerWidth; height = window.innerHeight;
+            tCanvas.width = aCanvas.width = width * dpr;
+            tCanvas.height = aCanvas.height = height * dpr;
+            tCtx.scale(dpr, dpr); aCtx.scale(dpr, dpr);
+        }
+
+        const reset = () => {
+            const num = parseInt(nS.value);
+            time = 0; isRunning = true;
+            lastPoints = Array(num).fill(null);
+            statusD.innerText = "Fractal drawing in progress...";
+            statusD.style.color = "#fff";
+            sV.innerText = sS.value; mV.innerText = mS.value;
+            rV.innerText = parseFloat(rS.value).toFixed(2); nV.innerText = num;
+            tCtx.clearRect(0, 0, width, height);
+        };
+
+        [sS, mS, rS, nS].forEach(s => s.oninput = reset);
+        resetB.onclick = reset;
+
+        function draw() {
+            if (isRunning) {
+                aCtx.clearRect(0, 0, width, height);
+                const num = parseInt(nS.value);
+                const subSteps = 150; // MASSIVE INCREASE FOR SILKY LINES
+                const speed = (parseFloat(sS.value) / 100) * (1 / (100 * subSteps));
+
+                for (let s = 0; s < subSteps; s++) {
+                    let curX = width / 2, curY = height / 2;
+                    time += speed;
+                    const baseAngle = 2 * Math.PI * time;
+
+                    for (let i = 0; i < num; i++) {
+                        const dir = (i % 2 === 0) ? -1 : 1;
+                        const armSpeed = Math.pow(parseInt(mS.value), i);
+                        const angle = dir * baseAngle * armSpeed;
+                        const len = (height * 0.22) * Math.pow(parseFloat(rS.value), i);
+                        
+                        const nextX = curX + Math.cos(angle) * len;
+                        const nextY = curY + Math.sin(angle) * len;
+
+                        // PAINT THE TRAIL PIECE-BY-PIECE
+                        const hue = (i * (360/num)) + (time * 150);
+                        if (lastPoints[i]) {
+                            tCtx.beginPath();
+                            tCtx.strokeStyle = `hsl(${hue}, 100%, 55%)`;
+                            tCtx.lineWidth = 1;
+                            tCtx.globalAlpha = 0.2;
+                            tCtx.moveTo(lastPoints[i].x, lastPoints[i].y);
+                            tCtx.lineTo(nextX, nextY);
+                            tCtx.stroke();
+                        }
+                        lastPoints[i] = {x: nextX, y: nextY};
+
+                        if (s === subSteps - 1) {
+                            aCtx.beginPath(); aCtx.strokeStyle = `hsl(${hue}, 100%, 65%)`; 
+                            aCtx.lineWidth = 1.5; aCtx.moveTo(curX, curY); aCtx.lineTo(nextX, nextY); aCtx.stroke();
+                        }
+                        curX = nextX; curY = nextY;
+                    }
+
+                    if (time >= 1.0) {
+                        isRunning = false;
+                        statusD.innerText = "fractal is done";
+                        statusD.style.color = "#fff";
+                        break;
+                    }
+                }
+            }
+            requestAnimationFrame(draw);
+        }
+
+        window.onresize = () => { setupCanvas(); reset(); };
+        setupCanvas(); reset(); draw();
+    </script>
+</body>
+</html>
